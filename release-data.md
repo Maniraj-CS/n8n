@@ -61,6 +61,23 @@
 | T020    | Security            | Role-based access           | Passed | High     | Works as expected.                            |
 
 ---
+# Resource 4: Open Defects
+
+| ID     | Area          | Severity | Description                                                              | Business Impact                            | Workaround                                                      | Status |
+| ------ | ------------- | -------- | ------------------------------------------------------------------------ | ------------------------------------------ | --------------------------------------------------------------- | ------ |
+| BUG201 | Reports       | Medium   | Large PDF exports fail when exporting more than 1,000 records.           | Large reports cannot be exported directly. | Filter reports into smaller date ranges before export.          | Open   |
+| BUG202 | Notifications | Medium   | Follow-up reminder may appear several minutes late during high activity. | Reminders may not appear immediately.      | Refresh the notification page if the reminder is not immediate. | Open   |
+| BUG203 | Mobile        | Low      | Long customer names wrap incorrectly on small screens.                   | Minor visual issue.                        | No workaround required because the issue does not prevent use.  | Open   |
+| BUG204 | Security | Critical | Unauthorized users can access restricted customer data. | Security risk | No workaround. | Open
+---
+
+# Resource 4.1: Workarounds
+
+| Defect ID | Workaround                                                     |
+| --------- | -------------------------------------------------------------- |
+| BUG201    | Filter report into smaller date ranges before export.          |
+| BUG202    | Refresh notification page if reminder is not immediate.        |
+| BUG203    | No workaround required because the issue does not prevent use. |
 
 
 ---
