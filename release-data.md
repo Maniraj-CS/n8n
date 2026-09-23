@@ -212,6 +212,15 @@ A release may proceed when:
 * **Risk Acceptance:** Not explicitly required/confirmed.
 
 ---
+### Critical Defect Rule
+
+If any unresolved defect has Critical severity, the release is Not Ready.
+
+A Critical unresolved defect must be resolved before the release can proceed.
+
+Risk acceptance, a workaround, or pending human review does not allow the release to proceed while the Critical defect remains unresolved.
+
+---
 
 # Release Decision Authority
 
