@@ -47,7 +47,7 @@
 | T006    | Notifications       | Generate reminder           | Passed | High     | Works as expected.                            |
 | T007    | Notifications       | Prevent duplicate reminders | Passed | High     | Works as expected.                            |
 | T008    | Reports             | Export report PDF           | Passed | High     | Works as expected.                            |
-| T009    | Reports             | Export large report PDF     | Passed | Medium   | Works when exporting more than 1,000 records. |
+| T009    | Reports             | Export large report PDF     | Fail | Medium   | Fail when exporting more than 1,000 records. |
 | T010    | User Management     | Assign permissions          | Passed | High     | Works as expected.                            |
 | T011    | Login               | Normal session timeout      | Passed | High     | Works as expected.                            |
 | T012    | Customer Search     | Partial customer name       | Passed | Medium   | Works as expected.                            |
