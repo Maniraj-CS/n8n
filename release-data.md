@@ -88,54 +88,100 @@
 
 # Resource 5: Release Rules
 
-## Release Recommendation Rules
+## RELEASE RECOMMENDATION
 
-### Ready
+The recommendation must be exactly one of:
 
-A release may be considered **Ready** when:
+`Ready`
 
-* No major issue prevents release.
-* Remaining risks are acceptable.
-* Required reviews and approvals are completed.
+`Conditional`
 
-### Conditional
+`Not Ready`
 
-A release may be considered **Conditional** when:
+Determine the recommendation using the Release Rules provided in the current input.
 
-* The release may proceed only after specific actions.
-* Required approvals are completed.
-* Required risk acceptance is confirmed.
+### STEP 1 — CHECK NOT READY
 
-### Not Ready
+First, check all explicit Not Ready rules.
 
-A release is **Not Ready** when:
+If ANY unresolved defect has `Critical` severity, the recommendation MUST be:
 
-* Important issues must be resolved before release.
+`Not Ready`
 
----
+This rule comes before all Conditional and Ready rules.
 
-## Defect Severity Rules
+For an unresolved Critical defect:
 
-### Critical Defect
+* Do not return `Conditional`.
+* Do not wait for risk acceptance.
+* Do not use risk acceptance as an exception.
+* Do not use a workaround as an exception.
+* Do not use pending human review as an exception.
+* The defect must be resolved before the release can proceed.
 
-* Release should not proceed until the defect is resolved.
+Therefore:
 
-### High Defect
+`Critical + unresolved` = `Not Ready`
 
-* Normally should not proceed.
-* Requires formal approval and a strong business reason if an exception is considered.
+If the provided Release Rules identify another issue as explicitly blocking release, apply that rule and return `Not Ready`.
 
-### Medium Defect
+### STEP 2 — CHECK CONDITIONAL
 
-A release may proceed when:
+Only perform this step if NO Not Ready rule applies.
 
-* Business impact is understood.
-* A workaround exists where needed.
-* Risk acceptance is confirmed.
+Return `Conditional` only when:
 
-### Low Defect
+* the Release Rules allow the release to proceed conditionally, AND
+* a required action, confirmation, investigation, approval, or risk acceptance is still incomplete.
 
-* May normally proceed if the issue is documented and assessed as acceptable.
+For example, if a Medium defect requires confirmed risk acceptance and that confirmation is not present, the release may be `Conditional` if the Release Rules allow it.
+
+Do not use Conditional when an explicit Not Ready rule applies.
+
+### STEP 3 — CHECK READY
+
+Only perform this step if:
+
+* no Not Ready rule applies, AND
+* no incomplete Conditional requirement applies.
+
+Return `Ready` only when all applicable Ready requirements are satisfied.
+
+### DECISION ORDER
+
+Always evaluate in this exact order:
+
+1. Explicit Not Ready rule
+2. Conditional rule
+3. Ready rule
+
+Never evaluate Conditional before checking Not Ready.
+
+### IMPORTANT
+
+The Release Rules are authoritative.
+
+Do not invent a blocking condition.
+
+However, when the provided Release Rules explicitly state that an unresolved Critical defect must block release, that rule MUST be followed.
+
+For example:
+
+Input:
+`BUG204 = Critical + Open`
+
+Release Rule:
+`Critical unresolved defect → release should not proceed until resolved`
+
+Required output:
+
+`"recommendation": "Not Ready"`
+
+Do NOT produce:
+
+`"recommendation": "Conditional"`
+
+even if risk acceptance is pending.
 
 ---
 
