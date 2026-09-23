@@ -47,7 +47,7 @@
 | T006    | Notifications       | Generate reminder           | Passed | High     | Works as expected.                            |
 | T007    | Notifications       | Prevent duplicate reminders | Passed | High     | Works as expected.                            |
 | T008    | Reports             | Export report PDF           | Passed | High     | Works as expected.                            |
-| T009    | Reports             | Export large report PDF     | Passed | Medium   | Works when exporting more than 1,000 records. |
+| T009    | Reports             | Export large report PDF     | Failed | Medium   | Fail when exporting more than 1,000 records. |
 | T010    | User Management     | Assign permissions          | Passed | High     | Works as expected.                            |
 | T011    | Login               | Normal session timeout      | Passed | High     | Works as expected.                            |
 | T012    | Customer Search     | Partial customer name       | Passed | Medium   | Works as expected.                            |
@@ -61,6 +61,28 @@
 | T020    | Security            | Role-based access           | Passed | High     | Works as expected.                            |
 
 ---
+
+# Resource 4: Open Defects
+
+| ID     | Area          | Severity | Description                                                              | Business Impact                            | Workaround                                                      | Status |
+| ------ | ------------- | -------- | ------------------------------------------------------------------------ | ------------------------------------------ | --------------------------------------------------------------- | ------ |
+| BUG201 | Reports       | Medium   | Large PDF exports fail when exporting more than 1,000 records.           | Large reports cannot be exported directly. | Filter reports into smaller date ranges before export.          | Open   |
+| BUG202 | Notifications | Medium   | Follow-up reminder may appear several minutes late during high activity. | Reminders may not appear immediately.      | Refresh the notification page if the reminder is not immediate. | Open   |
+| BUG203 | Mobile        | Low      | Long customer names wrap incorrectly on small screens.                   | Minor visual issue.                        | No workaround required because the issue does not prevent use.  | Open   |
+| BUG204 | Security      | Critical | Critical security vulnerability remains unresolved.                       | Unauthorized access to customer data may occur. | No workaround available.                                    | Open   |
+
+---
+
+# Resource 4.1: Workarounds
+
+| Defect ID | Workaround                                                     |
+| --------- | -------------------------------------------------------------- |
+| BUG201    | Filter report into smaller date ranges before export.          |
+| BUG202    | Refresh notification page if reminder is not immediate.        |
+| BUG203    | No workaround required because the issue does not prevent use. |
+
+
+
 
 ---
 
