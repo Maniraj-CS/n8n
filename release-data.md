@@ -68,7 +68,7 @@
 | BUG201 | Reports       | Medium   | Large PDF exports fail when exporting more than 1,000 records.           | Large reports cannot be exported directly. | Filter reports into smaller date ranges before export.          | Open   |
 | BUG202 | Notifications | Medium   | Follow-up reminder may appear several minutes late during high activity. | Reminders may not appear immediately.      | Refresh the notification page if the reminder is not immediate. | Open   |
 | BUG203 | Mobile        | Low      | Long customer names wrap incorrectly on small screens.                   | Minor visual issue.                        | No workaround required because the issue does not prevent use.  | Open   |
-
+| BUG204 | Security      | Critical | Critical security vulnerability remains unresolved.                       | Unauthorized access to customer data may occur. | No workaround available.                                    | Open   |
 
 ---
 
