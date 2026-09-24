@@ -34,6 +34,30 @@
 | CH012 | Bug Fix | Notifications       | Duplicate Reminder Fix | Completed | Fix duplicate follow-up reminders.                      |
 
 ---
+# Resource 3: QA Test Evidence
+
+| Test ID | Area                | Test Case                   | Result | Priority | Notes                                         |
+| ------- | ------------------- | --------------------------- | ------ | -------- | --------------------------------------------- |
+| T001    | Customer Management | Create/assign tags          | Passed | High     | Works as expected.                            |
+| T002    | Customer Management | Remove tags                 | Passed | Medium   | No issue.                                     |
+| T003    | Dashboard           | Filter by date              | Passed | High     | Works as expected.                            |
+| T004    | Dashboard           | Filter by salesperson       | Passed | High     | Works as expected.                            |
+| T005    | Dashboard           | Filter by region            | Passed | Medium   | Works as expected.                            |
+| T006    | Notifications       | Generate reminder           | Passed | High     | Works as expected.                            |
+| T007    | Notifications       | Prevent duplicate reminders | Passed | High     | Works as expected.                            |
+| T008    | Reports             | Export report PDF           | Passed | High     | Works as expected.                            |
+| T009    | Reports             | Export large report PDF     | Failed | Medium   | Failed when exporting more than 1,000 records. |
+| T010    | User Management     | Assign permissions          | Passed | High     | Works as expected.                            |
+| T011    | Login               | Normal session timeout      | Passed | High     | Works as expected.                            |
+| T012    | Customer Search     | Partial customer name       | Passed | Medium   | Works as expected.                            |
+| T013    | Dashboard           | Monthly totals              | Passed | High     | Works as expected.                            |
+| T014    | Email               | Formatting                  | Passed | Medium   | Works as expected.                            |
+| T015    | Mobile              | Navigation                  | Passed | Medium   | Works as expected.                            |
+| T016    | Reports             | Date filtering              | Passed | High     | Works as expected.                            |
+| T017    | Regression          | Existing customer creation  | Passed | High     | Works as expected.                            |
+| T018    | Regression          | Existing sales opportunity  | Passed | High     | Works as expected.                            |
+| T019    | Regression          | Existing reporting          | Passed | High     | Works as expected.                            |
+| T020    | Security            | Role-based access           | Passed | High     | Works as expected.                            |
 
 
 ---
