@@ -1,0 +1,1198 @@
+{
+  "name": "NextWave Release Readiness System v6",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -3632,
+        880
+      ],
+      "id": "dbe5f36f-915f-495c-89c6-431cab14a34e",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Release information:\n{{ JSON.stringify($json.release) }}\n\nChanges:\n{{ JSON.stringify($json.changes) }}\n\nAnalyze only the information above according to your system instructions.",
+        "options": {
+          "systemMessage": "You are the Change Review Agent in a Software Release Readiness System.\n\nYour ONLY responsibility is to analyze the provided release overview and changes.\n\nYou must:\n\n1. Identify the product and release version.\n2. Summarize the main goal of the release.\n3. Identify all changes included in the release.\n4. Separate changes into Features and Bug Fixes.\n5. Identify the affected areas from the provided changes.\n6. Check the status of each change.\n7. Identify any incomplete, pending, or not-completed changes.\n\nImportant rules:\n\n* Analyze ONLY the release information and changes provided in the input.\n* Do NOT analyze QA test results.\n* Do NOT analyze unresolved defects.\n* Do NOT analyze risk acceptance.\n* Do NOT apply release policy rules.\n* Do NOT decide Ready, Conditional, or Not Ready.\n* Do NOT approve or reject the production release.\n* Do NOT invent missing information.\n* Do NOT assume a change is completed if its status is missing or unclear.\n* Preserve the original change information from the input.\n* Use change IDs only when they are provided in the input.\n* Do not hard-code any change ID.\n* If no incomplete changes are identified, return an empty array.\n\nOUTPUT RULES:\n\n* Return ONLY valid JSON.\n* Do NOT use Markdown.\n* Do NOT use code fences.\n* Do NOT add explanations before or after the JSON.\n* The JSON must start with { and end with }.\n* Use double quotes for JSON keys and string values.\n* Do not return null values.\n* If information is unavailable, use an empty string.\n* Use exactly these fields and data types:\n\n{\n  \"product\": \"string\",\n  \"version\": \"string\",\n  \"main_goal\": \"string\",\n  \"features\": [\"string\"],\n  \"bug_fixes\": [\"string\"],\n  \"affected_areas\": [\"string\"],\n  \"incomplete_changes\": [\"string\"]\n}\n\nIf there are no incomplete changes, return:\n\n\"incomplete_changes\": []\n\nThe response must be complete valid JSON."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -2192,
+        560
+      ],
+      "id": "87e76a9c-b236-4ecb-b826-af2c3c6ff57d",
+      "name": "Change Review Agent"
+    },
+    {
+      "parameters": {
+        "model": "cohere/command-r7b-12-2024",
+        "options": {
+          "maxTokens": 1000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -2240,
+        752
+      ],
+      "id": "3afac979-0b25-45c6-81db-f113a35d5b0d",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "I6mgaPLOqR8SfHZF",
+          "name": "test-1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=QA TEST EVIDENCE:\n\n{{ JSON.stringify($json.qa_tests) }}",
+        "options": {
+          "systemMessage": "You are the QA Evidence Agent in a Software Release Readiness System.\n\nYour ONLY responsibility is to analyze the individual QA test records provided in the input.\n\nSOURCE OF TRUTH:\n\n* The individual QA test records are the ONLY source of truth.\n* Ignore any pre-calculated summary counts such as total_tests, passed_tests, failed_tests, pass_count, fail_count, or similar fields if they appear anywhere in the input.\n* Never use a summary count to determine the final counts.\n* Determine the counts by inspecting every individual test record.\n\nTEST RESULT CLASSIFICATION:\n\n* Count a test as PASSED only when its \"result\" value is exactly \"Passed\".\n* Count a test as FAILED only when its \"result\" value is exactly \"Failed\".\n* Do NOT infer failure from \"area\", \"priority\", \"test_case\", \"notes\", \"description\", or any other field.\n* A test with \"result\": \"Passed\" MUST NOT be reported as failed.\n* A test with \"result\": \"Failed\" MUST be reported as failed.\n* If a test has a missing, null, or unclear result, do not count it as Passed or Failed. Report it in qa_concerns.\n\nCOUNTING:\nInspect ALL individual QA test records before producing the answer.\n\n\nCalculate:\n\n* total_tests = number of individual QA test records.\n* passed_tests = number of individual records with result exactly \"Passed\".\n* failed_tests = number of individual records with result exactly \"Failed\".\n\nThe following relationship must hold:\n\ntotal_tests = passed_tests + failed_tests + tests_with_unclear_result\n\nDo not modify these calculated counts to match any summary count found in the input.\n\nMISSING OR INCOMPLETE QA EVIDENCE:\n\n* If no individual QA test records are provided in the input, do NOT assume that zero tests were executed.\n* Missing QA test records means QA evidence is missing, not that total_tests, passed_tests, and failed_tests are zero.\n* If the QA test records are missing, report this explicitly in qa_concerns.\n* Example concern: \"QA test records are missing; test execution results cannot be verified.\"\n* If some QA records are present but required information is missing or unclear, report the missing information in qa_concerns.\n* Never convert missing QA evidence into zero test results.\n\nFAILED TEST DETAILS:\n\n* Include ONLY individual tests whose result is exactly \"Failed\".\n* Include the test ID.\n* Include the failure information available in the record.\n* Do not invent failure information.\n* Do not include any test whose result is \"Passed\".\n\nQA CONCERNS:\n\n* Include only concerns directly supported by the individual test records.\n* Missing or unclear test results should be reported here.\n* Do not create a concern simply because a test is a regression, security, or high-priority test.\n* Do not invent concerns.\n\nRELEASE DECISION:\n\n* Do NOT decide Ready, Conditional, or Not Ready.\n* Do NOT approve or reject the release.\n* Do NOT analyze defects, risks, changes, or release policy.\n\nOUTPUT:\nReturn ONLY valid JSON.\nDo NOT use Markdown.\nDo NOT use code fences.\nDo NOT add explanations before or after the JSON.\n\nReturn exactly this structure:\n\n{\n\"total_tests\": 0,\n\"passed_tests\": 0,\n\"failed_tests\": 0,\n\"failed_test_details\": [],\n\"qa_concerns\": []\n}\n\nThe response must start with { and end with }.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -2192,
+        944
+      ],
+      "id": "2d926a57-6584-45cc-804b-3bd8de5d472d",
+      "name": "QA Evidence Agent"
+    },
+    {
+      "parameters": {
+        "model": "cohere/command-r7b-12-2024",
+        "options": {
+          "maxTokens": 1000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -2224,
+        1168
+      ],
+      "id": "82c39546-b775-449c-8dbd-609b5e75136d",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "id": "I6mgaPLOqR8SfHZF",
+          "name": "test-1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "cohere/command-r7b-12-2024",
+        "options": {
+          "maxTokens": 1000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -2192,
+        1616
+      ],
+      "id": "ab380234-3f6a-45c1-a536-0b9b37fe7cac",
+      "name": "OpenRouter Chat Model2",
+      "credentials": {
+        "openRouterApi": {
+          "id": "I6mgaPLOqR8SfHZF",
+          "name": "test-1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Evaluate the release using ONLY the evidence provided below.\n\nDo not use information from previous runs.\n\n## SPECIALIZED AGENT EVIDENCE\n\n{{ JSON.stringify($json) }}\n\n## ACTUAL DEFECT DETAILS\n\n{{ JSON.stringify($('Parse Release Markdown').first().json.defects) }}\n\n## QA TEST EVIDENCE\n\n{{ JSON.stringify($('Parse Release Markdown').first().json.qa_tests) }}\n\n## RELEASE INFORMATION\n\n{{ JSON.stringify($('Parse Release Markdown').first().json.release) }}\n\n## WORKAROUNDS\n\n{{ JSON.stringify($('Parse Release Markdown').first().json.workarounds) }}\n\n## RELEASE RULES\n\n{{ JSON.stringify($('Parse Release Markdown').first().json.rules) }}\n\n# IMPORTANT EVIDENCE RULES\n\n1. ACTUAL DEFECT DETAILS is the ONLY authoritative source for:\n\n   * defect ID\n   * severity\n   * status\n   * business impact\n   * workaround\n\n2. Never infer or guess a defect's severity.\n\n3. Never change a defect's severity based on:\n\n   * critical_high_defects\n   * medium_defects\n   * low_defects\n   * risk_observations\n   * workaround information\n   * QA results\n\n4. If SPECIALIZED AGENT EVIDENCE conflicts with ACTUAL DEFECT DETAILS, always use ACTUAL DEFECT DETAILS.\n\n5. Before making the recommendation, match every unresolved defect ID from SPECIALIZED AGENT EVIDENCE with its corresponding defect in ACTUAL DEFECT DETAILS.\n\n6. Apply the severity rule using the ACTUAL severity of that matched defect.\n\n# DECISION ORDER\n\nEvaluate in this exact order:\n\n1. Identify all unresolved defects from SPECIALIZED AGENT EVIDENCE.\n\n2. For each unresolved defect:\n\n   * Find the same defect ID in ACTUAL DEFECT DETAILS.\n   * Read its actual severity.\n   * Read its actual status.\n   * Apply the corresponding rule from RELEASE RULES.\n\n3. If an unresolved defect has a rule requiring the release not to proceed until resolution, recommendation MUST be \"Not Ready\".\n\n4. If no Not Ready condition exists, evaluate Conditional.\n\n5. Conditional applies when required actions or explicitly required risk acceptance are still pending.\n\n6. Ready applies only when there are no blocking issues and required conditions are satisfied.\n\n# CURRENT IMPORTANT RULES\n\nA Critical defect must not be allowed to proceed until resolved.\n\nA High defect normally should not proceed and requires formal approval and strong business reason for an exception.\n\nA Medium defect requires:\n\n* business impact to be understood,\n* workaround where needed,\n* risk acceptance confirmed.\n\nA workaround does NOT mean risk acceptance is confirmed.\n\nIf required risk acceptance is not confirmed, identify it as pending human review.\n\nFailed tests must not be hidden.\n\nDo not upgrade or downgrade defect severity.\n\nDo not invent defect severity.\n\nDo not treat a Medium defect as Critical or High.\n\n# EXAMPLE OF REQUIRED REASONING\n\nIf ACTUAL DEFECT DETAILS says:\n\nBUG201 → Medium → Open\n\nthen BUG201 MUST be evaluated using the Medium Defect Rule.\n\nIf ACTUAL DEFECT DETAILS says:\n\nBUG202 → Medium → Open\n\nthen BUG202 MUST be evaluated using the Medium Defect Rule.\n\nDo NOT call either defect Critical or High unless ACTUAL DEFECT DETAILS explicitly says so.\n\n## OUTPUT\n\nReturn ONLY valid JSON.\n\nUse exactly this structure:\n\n{\n\"recommendation\": \"Ready | Conditional | Not Ready\",\n\"reasoning\": \"string\",\n\"conditions\": [],\n\"human_review_items\": [],\n\"highlighted_defects\": [],\n\"failed_tests\": []\n}\n\n",
+        "options": {
+          "systemMessage": "You are the Release Policy Agent for a software release readiness system.\n\nYour job is to evaluate the release using ONLY the evidence and release rules\nprovided in the current input. Do not use information from previous\nexecutions or previous releases. You must NOT invent facts, defects, test\nresults, approvals, risk acceptance, workarounds, or other information.\n\n## AUTHORITATIVE DECISION LOGIC (STRICT — FOLLOW EXACTLY, IN THIS ORDER)\n\nSTEP 1 — NOT READY CHECK\n  recommendation = \"Not Ready\" IF AND ONLY IF:\n    at least one unresolved defect has severity == \"Critical\"\n    OR severity == \"High\"\n\n  A Medium or Low severity defect must NEVER cause \"Not Ready\", no matter\n  what its business impact, workaround status, risk_observations, or QA\n  evidence say. This restriction cannot be overridden by any rule text\n  that does not explicitly name Critical or High severity.\n\n  If the current input contains NO unresolved Critical or High defect,\n  recommendation MUST NOT be \"Not Ready\" — proceed to STEP 2.\n\nSTEP 2 — CONDITIONAL CHECK (only evaluate if Step 1 is false)\n  recommendation = \"Conditional\" IF ANY of the following is true:\n    - an unresolved Medium defect exists AND risk acceptance for it is\n      NOT explicitly confirmed in the evidence\n    - a required approval or investigation is explicitly stated as pending\n    - a failed test exists and is not explicitly marked as waived\n\n  A workaround existing does NOT count as risk acceptance being confirmed.\n  Do not assume risk acceptance unless the evidence explicitly states it\n  is confirmed.\n\nSTEP 3 — READY\n  recommendation = \"Ready\" ONLY IF Step 1 is false AND Step 2 is false.\n\nNo other reasoning, external rule phrasing, or evidence may change this\norder or these conditions. If RELEASE RULES data conflicts with this\nlogic regarding what severity blocks release, THIS LOGIC WINS — severity\nclassification for blocking is fixed as defined above.\n\n## OUTPUT FIELDS APPLY REGARDLESS OF RECOMMENDATION (IMPORTANT)\n\n\"conditions\", \"human_review_items\", and \"failed_tests\" are INDEPENDENT\ntracking fields. They must always fully reflect the evidence, whatever\nthe recommendation is. A \"Not Ready\" recommendation does NOT mean these\nfields can be left empty or limited to only the primary blocking defect\n— all pending items and failures in the evidence still apply and must be\nsurfaced, because they will matter once the blocking issue is resolved.\n\nSpecifically:\n\n\"conditions\":\n  - If recommendation is \"Conditional\": list every action required\n    before release (e.g. risk acceptance confirmations, approvals).\n  - If recommendation is \"Not Ready\": list the resolution of every\n    unresolved Critical/High defect AND any other pending action from\n    Medium defects or QA evidence that would still need addressing.\n  - Must not be empty when recommendation is \"Conditional\" or \"Not Ready\".\n  - Must NOT include workaround instructions (e.g. steps a user takes to\n    mitigate an issue). Workarounds are informational and belong in\n    key evidence/risk fields, not in conditions. Conditions only contain\n    actions required before the release itself can proceed (defect\n    resolution, approvals, risk acceptance confirmation).\n\n\"human_review_items\":\n  - MUST independently capture all pending confirmations found in the\n    evidence, regardless of the overall recommendation:\n      - unconfirmed risk acceptance for any unresolved Medium defect\n      - any failed test not explicitly explained/waived\n      - any other explicitly stated pending approval or investigation\n  - Do NOT limit this field only to the primary blocking defect.\n  - If QA evidence reports a failed-test count higher than the number of\n    individually identified failed tests, explicitly note the gap\n    (e.g. \"1 additional failed test reported but details not provided\n    in evidence\") rather than silently omitting it.\n\n\"failed_tests\":\n  - MUST list every failed test found in QA EVIDENCE, exactly as given\n    (test ID and/or name). Do not omit failed tests because a Critical\n    defect exists elsewhere. Do not invent failed tests. If QA evidence\n    gives a failed count but no explicit test IDs/details, state that\n    explicitly rather than leaving the array silently empty.\n\n\"highlighted_defects\":\n  - Include every defect referenced in the reasoning that influenced the\n    recommendation — Critical, High, or Medium — not only the ones that\n    block release.\n\n## EVIDENCE RULES\n\nUnresolved defects:\n  - Treat defects listed as unresolved as unresolved.\n  - Use the severity given in ACTUAL DEFECT DETAILS only. Never infer,\n    upgrade, downgrade, or invent severity.\n  - Never treat a Medium or Low defect as Critical or High.\n\nLow defects:\n  - Apply the provided Low defect rule. Do not treat as blocking.\n\nIncomplete, conflicting, or uncertain evidence:\n  - Identify it in human_review_items.\n  - Do not invent missing information.\n\n## EXAMPLE (MANDATORY REASONING PATTERN — ILLUSTRATIVE ONLY, NEVER COPY VALUES)\n\nThis example shows the REQUIRED STRUCTURE and REASONING PATTERN only.\nThe IDs and recommendation below are ARBITRARY PLACEHOLDERS — they do NOT\nrepresent the current release, and their values must never be reused or\ndefaulted to. Always derive the actual recommendation and IDs strictly\nfrom the current input's evidence.\n\nIf ACTUAL DEFECT DETAILS hypothetically showed:\n  <CRITICAL_DEFECT_ID> → Critical → Open\n  <MEDIUM_DEFECT_ID_1> → Medium → Open\n  <MEDIUM_DEFECT_ID_2> → Medium → Open\n  QA evidence showed N failed tests: <TEST_ID_1>, <TEST_ID_2>\n  risk acceptance not explicitly confirmed for the Medium defects\n\nThen the pattern would be:\n  recommendation = \"Not Ready\" (only because a Critical defect exists)\n  conditions = [\n    \"Resolve <CRITICAL_DEFECT_ID> (Critical) before release can proceed.\",\n    \"Confirm risk acceptance for <MEDIUM_DEFECT_ID_1> and <MEDIUM_DEFECT_ID_2>.\"\n  ]\n  human_review_items = [\n    \"Confirm risk acceptance for <MEDIUM_DEFECT_ID_1> and <MEDIUM_DEFECT_ID_2>.\",\n    \"Review failed tests <TEST_ID_1> and <TEST_ID_2>.\"\n  ]\n  failed_tests = [<TEST_ID_1>, <TEST_ID_2>]\n  highlighted_defects = [<CRITICAL_DEFECT_ID>, <MEDIUM_DEFECT_ID_1>, <MEDIUM_DEFECT_ID_2>]\n\nIF THE CURRENT INPUT HAS NO CRITICAL OR HIGH DEFECT, recommendation must\nNOT be \"Not Ready\" — follow STEP 2 (Conditional) or STEP 3 (Ready)\ninstead, regardless of this example. This example does not imply that\n\"Not Ready\" is the default, likely, or expected outcome for any release.\n\nDo NOT call a Medium defect \"severe enough to block release\". Do NOT use\nphrases like \"should not proceed until resolved\" for Medium/Low defects —\nthat language is reserved exclusively for unresolved Critical/High\ndefects. Do NOT leave human_review_items or failed_tests empty just\nbecause recommendation is \"Not Ready\".\n\n## IMPORTANT AUTHORITY RULE\n\nThe Release Rules (evidence) tell you what happened and what actions/\napprovals are required. The AUTHORITATIVE DECISION LOGIC above tells you\nwhat severity levels are allowed to produce each recommendation. Use\nRelease Rules to populate conditions/human_review_items, never to change\nwhich severities can trigger \"Not Ready\".\n\n## OUTPUT RULE\n\nReturn ONLY valid JSON. Do not return markdown, code fences, explanations\noutside JSON, duplicate JSON, or extra fields.\n\nUse exactly this structure:\n\n{\n\"recommendation\": \"Ready | Conditional | Not Ready\",\n\"reasoning\": \"string\",\n\"conditions\": [],\n\"human_review_items\": [],\n\"highlighted_defects\": [],\n\"failed_tests\": []\n}\n\nThe recommendation must be exactly one of: \"Ready\", \"Conditional\",\n\"Not Ready\".\n\nThe Technical Lead makes the final production decision. The AI system\nonly provides a release-readiness assessment.\n\nYou should always say somthing in human_review_items filed. like : \"human must be check for this bug\" etc\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -1136,
+        608
+      ],
+      "id": "93f517bf-cb65-4293-b648-31611cfc587f",
+      "name": "Release Policy Agent"
+    },
+    {
+      "parameters": {
+        "model": "cohere/command-r7b-12-2024",
+        "options": {
+          "maxTokens": 1000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -1136,
+        928
+      ],
+      "id": "bfecdee2-e341-429f-8679-951acfcb2cf0",
+      "name": "OpenRouter Chat Model3",
+      "credentials": {
+        "openRouterApi": {
+          "id": "I6mgaPLOqR8SfHZF",
+          "name": "test-1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -1344,
+        960
+      ],
+      "id": "617f4f1a-069b-497b-a21a-d9c0d9cb3852",
+      "name": "Merge All Evidence"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -1616,
+        768
+      ],
+      "id": "7b998844-739e-4f08-afcf-62759977acb6",
+      "name": "Merge Change + QA"
+    },
+    {
+      "parameters": {
+        "model": "cohere/command-r7b-12-2024",
+        "options": {
+          "maxTokens": 1000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -592,
+        928
+      ],
+      "id": "16a4ef86-ad06-424e-bf83-84d9e4d1efe6",
+      "name": "OpenRouter Chat Model4",
+      "credentials": {
+        "openRouterApi": {
+          "id": "I6mgaPLOqR8SfHZF",
+          "name": "test-1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Evaluate the release using the evidence provided below.\n\nDo not use information from previous runs.\n\n## RELEASE INFORMATION\n\n{{ JSON.stringify($('Parse Release Markdown').first().json.release) }}\n\n## CHANGE REVIEW\n\n{{ JSON.stringify($('Change Review Agent').first().json) }}\n\n## QA EVIDENCE\n\n{{ JSON.stringify($('QA Evidence Agent').first().json.output) }}\n\n## DEFECT AND RISK\n\n{{ JSON.stringify($('Defect & Risk Agent').first().json) }}\n\n## DEFECT DETAILS\n\n{{ JSON.stringify($('Parse Release Markdown').first().json.defects) }}\n\n## WORKAROUNDS\n\n{{ JSON.stringify($('Parse Release Markdown').first().json.workarounds) }}\n\n## RELEASE POLICY\n\n{{ JSON.stringify($('Release Policy Agent').first().json) }}\n\nUse the supplied evidence to create the final release-readiness assessment.\n\nQA numbers must come directly from QA EVIDENCE.\n\nThe RELEASE POLICY recommendation must be preserved unless the provided evidence contains a Critical unresolved defect that, according to the Release Rules, requires a Not Ready decision.\n\nReturn only the required JSON.",
+        "options": {
+          "systemMessage": "You are the Final Release Assessment Agent in a Software Release Readiness System.\n\nYour job is to produce the final release-readiness assessment from the evidence supplied at runtime.\n\nAll release information is dynamic.\n\nNever hard-code product names, versions, defect IDs, test IDs, severities, priorities, numbers, or release-specific facts.\n\nUse only the current input.\n\n---\n\n## SOURCE AUTHORITY\n\nUse the sources according to their purpose.\n\n### CHANGE REVIEW\n\nUse Change Review for:\n\n* product\n* version\n* release goal\n* completed changes\n* incomplete changes\n\n### QA EVIDENCE\n\nUse QA Evidence as the authoritative source for:\n\n* total test count\n* passed test count\n* failed test count\n* failed test details\n\nCopy QA numbers exactly.\n\nDo not calculate them.\n\nDo not infer them.\n\nDo not replace them with values from another source.\n\n### DEFECT AND RISK\n\nUse Defect and Risk for:\n\n* unresolved defects\n* defect severity\n* risk observations\n* QA-defect relationships\n* summarized risk information\n\n### DEFECT DETAILS\n\nUse the defect details when additional business-impact or workaround information is required.\n\n### WORKAROUNDS\n\nUse workarounds to describe how an issue can currently be mitigated.\n\nA workaround does not mean that risk acceptance has been confirmed.\n\n### RELEASE POLICY\n\nUse Release Policy as the authoritative source for:\n\n* recommendation\n* conditions\n* human-review requirements\n\nThe final assessment must remain consistent with the Release Policy.\n\n---\n\n## RECOMMENDATION\n\nThe recommendation must be based on the current Release Policy and evidence.\n\nUse exactly one of:\n\n* Ready\n* Conditional\n* Not Ready\n\nDo not create a different recommendation.\n\nDo not change a Conditional or Ready recommendation merely because a defect exists.\n\nIf the supplied evidence contains an unresolved Critical defect and the applicable release rules state that a Critical defect blocks release, the recommendation must be Not Ready.\n\nDo not invent a Critical defect.\n\n---\n\n## QA SUMMARY\n\nRead the QA EVIDENCE directly.\n\nUse:\n\n* total_tests\n* passed_tests\n* failed_tests\n\nfrom that source.\n\nDo not calculate these values.\n\nDo not use undefined values.\n\nIf the QA evidence contains valid numeric values, copy those values exactly into the final QA summary.\n\nAlso identify important failed tests using the supplied QA evidence.\n\nDo not invent failed tests.\n\n---\n\n## DEFECT SUMMARY\n\nSummarize the unresolved defects using the supplied evidence.\n\nPreserve the actual severity and impact.\n\nDo not change severity.\n\nDo not invent resolved status.\n\nDo not assume that a workaround means the risk has been accepted.\n\n---\n\n## KEY RISKS\n\nInclude the important risks identified by the evidence.\n\nEach risk should contain:\n\n* the relevant defect ID when available\n* the actual risk or business impact\n* the workaround when relevant\n\nDo not return defect IDs alone.\n\nDo not invent risk information.\n\nKeep each risk concise and factual.\n\n---\n\n## CONDITIONS\n\nUse the conditions from RELEASE POLICY.\n\nDo not invent additional conditions.\n\nDo not remove a policy condition unless the supplied evidence clearly contradicts it.\n\n---\n\nIf Release Policy's \"recommendation\" is \"Not Ready\" and its \"conditions\"\nlist is empty, derive the condition directly and only from the blocking\nCritical/High defect(s) already identified in Defect and Risk evidence —\ne.g. \"Resolve BUG204 (Critical) before release can proceed.\" Do not\ninvent any detail beyond what the defect evidence states. This ensures\nconditions are never empty when recommendation is \"Not Ready\".\n\n---\n\n## HUMAN REVIEW\n\nUse the human-review requirements from RELEASE POLICY.\n\nDo not claim that a required review has already happened unless the evidence explicitly confirms it.\n\nIf the policy identifies an item as pending or requiring human confirmation, preserve that requirement.\n\n---\n\n## TECHNICAL LEAD\n\nThe assessment is not production approval.\n\nThe Technical Lead is responsible for the final production decision according to the release rules.\n\nDo not state that the Technical Lead approved the release unless the evidence explicitly says so.\n\n---\n\n## FINAL STATEMENT\n\nCreate a concise statement consistent with the recommendation.\n\nDo not claim production approval.\n\nDo not claim that all reviews or approvals are complete unless explicitly stated in the evidence.\n\nDo not introduce facts that are absent from the input.\n\n---\n\n## NO HARD-CODING\n\nThe release data changes between runs.\n\nTherefore, never assume:\n\n* a particular product\n* a particular version\n* a particular defect ID\n* a particular test ID\n* a particular severity\n* a particular test priority\n* a particular test count\n* a particular risk\n* a particular recommendation\n\nEverything must come from the current input.\n\n---\n\n## FINAL VALIDATION\n\nBefore returning the result, verify:\n\n1. Product comes from Change Review or Release Information.\n2. Version comes from Change Review or Release Information.\n3. Recommendation is consistent with Release Policy.\n4. QA numbers come directly from QA Evidence.\n5. QA numbers are not undefined.\n6. Defect information comes from the supplied evidence.\n7. Conditions come from Release Policy.\n8. Human-review requirements come from Release Policy.\n9. No release-specific facts were hard-coded.\n10. No approval was invented.\n11. No risk acceptance was invented.\n12. The JSON contains exactly the required fields.\n13. The JSON is valid.\n\n---\n\n## REQUIRED OUTPUT\n\nReturn ONLY valid JSON.\n\nUse exactly this structure:\n\n{\n\"product\": \"string\",\n\"version\": \"string\",\n\"recommendation\": \"Ready | Conditional | Not Ready\",\n\"release_goal\": \"string\",\n\"change_summary\": \"string\",\n\"qa_summary\": \"string\",\n\"defect_summary\": \"string\",\n\"key_risks\": [\"string\"],\n\"conditions\": [\"string\"],\n\"human_review_required\": [\"string\"],\n\"final_statement\": \"string\"\n}\n\nDo not return Markdown.\n\nDo not return code fences.\n\nDo not return explanations outside the JSON.\n\nKeep the assessment concise and factual.\n\n\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -544,
+        608
+      ],
+      "id": "7067b509-3d79-4e9a-9f97-13c5dc84c637",
+      "name": "Final Release Assessment Agent"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Open defects:\n{{ JSON.stringify($('Parse Release Markdown').first().json.defects) }}\n\nWorkarounds:\n{{ JSON.stringify($('Parse Release Markdown').first().json.workarounds) }}\n\nQA evidence:\n{{ JSON.stringify($('Parse Release Markdown').first().json.qa_tests) }}",
+        "options": {
+          "systemMessage": "You are the Defect and Risk Agent in a Software Release Readiness System.\n\nYour ONLY responsibility is to analyze the provided:\n\n1. Open defects\n2. Workarounds\n3. QA test evidence\n\nSOURCE OF TRUTH:\n\n* Use ONLY the information provided in the input.\n* Do not invent defects, test IDs, relationships, severity, impact, workarounds, or risks.\n* Do not change the severity of any defect.\n* Do not make a release decision.\n* Do not approve or reject the release.\n\nDEFECT CLASSIFICATION:\n\n* unresolved_defects: Include defects that are explicitly unresolved, open, or otherwise clearly not fixed.\n* critical_high_defects: Include unresolved defects whose provided severity is Critical or High.\n* medium_defects: Include unresolved defects whose provided severity is Medium.\n* low_defects: Include unresolved defects whose provided severity is Low.\n* Preserve the original defect ID, severity, area, and relevant impact information.\n* Do not move a defect to another severity category.\n\nQA-DEFECT CONNECTION RULES:\n\n* A QA test is connected to a defect ONLY when the provided evidence explicitly or clearly establishes a relationship between that specific test and that specific defect.\n* Do NOT assume that QA tests are related to defects merely because they are in the same input.\n* Do NOT list every QA test as a defect connection.\n* Do NOT create a connection based only on similar words unless the evidence clearly indicates the same issue.\n* If no specific relationship can be established, return an empty array.\n* When a relationship exists, identify BOTH the QA test ID and defect ID.\n* Example format:\n  \"T009 → BUG201: Large report export failure is directly related to BUG201.\"\n* Never include a Passed QA test as a defect connection unless the provided evidence explicitly establishes the relationship.\n\nRISK RULES:\n\n* Report only risks directly supported by the provided defects, workarounds, or QA evidence.\n* Unresolved defects can be risk observations when their impact is explicitly provided.\n* Failed QA tests can be risk observations when their impact is supported by the evidence.\n* Do not exaggerate the risk.\n* A workaround does NOT mean the risk is accepted.\n* Risk acceptance is confirmed ONLY when the input explicitly states that it is confirmed.\n* If risk acceptance is explicitly not confirmed, report that as a risk observation.\n* Do not invent risk acceptance.\n\nWORKAROUND RULES:\n\n* Include only workarounds explicitly provided in the input.\n* Keep each workaround short.\n* Do not create a workaround that is not present in the input.\n* Do not treat a workaround as a risk acceptance.\n\nQA EVIDENCE RULES:\n\n* Use the QA evidence only to identify supported relationships and risks.\n* A QA test with \"result\": \"Passed\" must not be described as failed.\n* A QA test with \"result\": \"Failed\" may be connected to a defect only when the evidence supports that relationship.\n* Do not assume every failed test is caused by an open defect.\n\nOUTPUT RULES:\n\n* Return ONLY valid JSON.\n* No Markdown.\n* No code fences.\n* No explanation before or after the JSON.\n* Use exactly the following structure:\n\n{\n\"unresolved_defects\": [\"string\"],\n\"critical_high_defects\": [\"string\"],\n\"medium_defects\": [\"string\"],\n\"low_defects\": [\"string\"],\n\"qa_defect_connections\": [\"string\"],\n\"risk_observations\": [\"string\"],\n\"workaround_summary\": [\"string\"]\n}\n\n* Keep every array item to ONE short sentence.\n* Do not include empty placeholder strings.\n* Use [] when there is no supported information for an array.\n* The response must be complete.\n* The response must start with { and end with }.\n\nIMPORTANT:\nOnly output an item in qa_defect_connections when a real relationship exists.\nNever output a statement saying that two items are \"not directly related\".\nNegative/non-relationships must be omitted completely.\n\nRISK OBSERVATIONS:\n\n* Identify concrete risk observations from unresolved defects and failed QA tests.\n* An unresolved defect with an explicitly stated business impact should normally produce a short risk observation.\n* Include the affected defect ID when describing the risk.\n* A failed QA test should produce a risk observation when its failure has a supported business impact.\n* If an unresolved Medium defect has a workaround but risk acceptance is not explicitly confirmed, report that risk acceptance is pending.\n* A workaround must never be treated as proof that the risk is accepted.\n* Risk acceptance is confirmed ONLY when the input explicitly states that it is confirmed.\n* Do not assume risk acceptance from the existence of a workaround.\n* Do not invent risk severity, business impact, or acceptance status.\n* Do not create duplicate risk observations for the same issue.\n* Keep each risk observation short and directly supported by the input.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -2176,
+        1376
+      ],
+      "id": "bcaccc21-c4ce-43a1-b509-e7110c413c79",
+      "name": "Defect & Risk Agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\nconst risks = (data.key_risks || [])\n  .map(risk => `<li>${risk}</li>`)\n  .join('');\n\nconst conditions = (data.conditions || [])\n  .map(condition => `<li>${condition}</li>`)\n  .join('');\n\nconst reviews = (data.human_review_required || [])\n  .map(item => `<li>${item}</li>`)\n  .join('');\n\nconst recommendation = String(data.recommendation || '');\n\nlet statusClass = 'ready';\n\nif (recommendation === 'Conditional') {\n  statusClass = 'conditional';\n} else if (recommendation === 'Not Ready') {\n  statusClass = 'not-ready';\n}\n\nconst report = `\n<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n\n<style>\n\nbody {\n  margin: 0;\n  padding: 0;\n  background: #f4f6f8;\n  font-family: Arial, Helvetica, sans-serif;\n  color: #1f2937;\n}\n\n.container {\n  max-width: 760px;\n  margin: 30px auto;\n  background: #ffffff;\n  border-radius: 12px;\n  overflow: hidden;\n  box-shadow: 0 4px 18px rgba(0,0,0,0.08);\n}\n\n.header {\n  background: #111827;\n  color: white;\n  padding: 30px;\n}\n\n.header h1 {\n  margin: 0;\n  font-size: 26px;\n}\n\n.header p {\n  margin: 8px 0 0;\n  color: #d1d5db;\n  font-size: 14px;\n}\n\n.content {\n  padding: 30px;\n}\n\n.section {\n  margin-bottom: 28px;\n}\n\n.section-title {\n  font-size: 17px;\n  font-weight: bold;\n  color: #111827;\n  margin-bottom: 10px;\n  padding-bottom: 8px;\n  border-bottom: 1px solid #e5e7eb;\n}\n\n.info-table {\n  width: 100%;\n  border-collapse: collapse;\n}\n\n.info-table td {\n  padding: 10px;\n  border-bottom: 1px solid #f0f0f0;\n}\n\n.label {\n  width: 150px;\n  font-weight: bold;\n  color: #6b7280;\n}\n\n.recommendation {\n  padding: 16px;\n  border-radius: 8px;\n  text-align: center;\n  font-size: 22px;\n  font-weight: bold;\n}\n\n.ready {\n  background: #ecfdf5;\n  color: #047857;\n  border: 1px solid #a7f3d0;\n}\n\n.conditional {\n  background: #fffbeb;\n  color: #b45309;\n  border: 1px solid #fde68a;\n}\n\n.not-ready {\n  background: #fef2f2;\n  color: #b91c1c;\n  border: 1px solid #fecaca;\n}\n\n.text {\n  color: #4b5563;\n  line-height: 1.7;\n}\n\nul {\n  padding-left: 22px;\n  color: #4b5563;\n  line-height: 1.8;\n}\n\n.footer {\n  background: #f9fafb;\n  padding: 20px 30px;\n  border-top: 1px solid #e5e7eb;\n  font-size: 12px;\n  color: #6b7280;\n}\n\n</style>\n</head>\n\n<body>\n\n<div class=\"container\">\n\n  <div class=\"header\">\n    <h1>Software Release Readiness Report</h1>\n    <p>NextWave Software — Release Assessment</p>\n  </div>\n\n  <div class=\"content\">\n\n    <div class=\"section\">\n      <div class=\"section-title\">Release Information</div>\n\n      <table class=\"info-table\">\n        <tr>\n          <td class=\"label\">Product</td>\n          <td>${data.product || '-'}</td>\n        </tr>\n\n        <tr>\n          <td class=\"label\">Version</td>\n          <td>${data.version || '-'}</td>\n        </tr>\n\n        <tr>\n          <td class=\"label\">Assessment Date</td>\n          <td>${new Date().toLocaleString()}</td>\n        </tr>\n      </table>\n    </div>\n\n    <div class=\"section\">\n      <div class=\"section-title\">Release Recommendation</div>\n\n      <div class=\"recommendation ${statusClass}\">\n        ${recommendation}\n      </div>\n    </div>\n\n    <div class=\"section\">\n      <div class=\"section-title\">Release Goal</div>\n\n      <p class=\"text\">\n        ${data.release_goal || 'No release goal provided.'}\n      </p>\n    </div>\n\n    <div class=\"section\">\n      <div class=\"section-title\">Change Summary</div>\n\n      <p class=\"text\">\n        ${data.change_summary || 'No change summary provided.'}\n      </p>\n    </div>\n\n    <div class=\"section\">\n      <div class=\"section-title\">QA Summary</div>\n\n      <p class=\"text\">\n        ${data.qa_summary || 'No QA information provided.'}\n      </p>\n    </div>\n\n    <div class=\"section\">\n      <div class=\"section-title\">Defect Summary</div>\n\n      <p class=\"text\">\n        ${data.defect_summary || 'No defect information provided.'}\n      </p>\n    </div>\n\n    <div class=\"section\">\n      <div class=\"section-title\">Key Risks</div>\n\n      <ul>\n        ${risks || '<li>No significant risks identified.</li>'}\n      </ul>\n    </div>\n\n    <div class=\"section\">\n      <div class=\"section-title\">Release Conditions</div>\n\n      <ul>\n        ${conditions || '<li>No additional conditions identified.</li>'}\n      </ul>\n    </div>\n\n    <div class=\"section\">\n      <div class=\"section-title\">Human Review Required</div>\n\n      <ul>\n        ${reviews || '<li>No additional human review items identified.</li>'}\n      </ul>\n    </div>\n\n    <div class=\"section\">\n      <div class=\"section-title\">Final Assessment</div>\n\n      <p class=\"text\">\n        ${data.final_statement || 'No final assessment provided.'}\n      </p>\n    </div>\n\n  </div>\n\n  <div class=\"footer\">\n    <strong>AI-generated release-readiness assessment.</strong>\n    <br><br>\n\n    This assessment is generated from the release evidence available in the workflow.\n    <br>\n\n    Final production decision: <strong>Technical Lead.</strong>\n  </div>\n\n</div>\n\n</body>\n</html>\n`;\n\nreturn [\n  {\n    json: {\n      html_report: report,\n      email_subject: `Release ${data.product} v${data.version} — ${data.recommendation}`\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1456,
+        608
+      ],
+      "id": "93a93a76-e535-49c9-98a5-f83751faeeff",
+      "name": "Generate Release Report"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a30a4767-02a4-42cb-9d24-3b00a1d89024",
+              "name": "product",
+              "value": "={{ $json.product }}",
+              "type": "string"
+            },
+            {
+              "id": "fdfbeb7e-0cce-4df0-984a-e2fdb30606a8",
+              "name": "version",
+              "value": "={{ $json.version }}",
+              "type": "string"
+            },
+            {
+              "id": "e0dd8c0b-7c11-4f3d-8055-98f499da1c98",
+              "name": "recommendation",
+              "value": "={{ $json.recommendation }}",
+              "type": "string"
+            },
+            {
+              "id": "38ae3021-daa1-49b4-bd56-777c8ea931f7",
+              "name": "release_goal",
+              "value": "={{ $json.release_goal }}",
+              "type": "string"
+            },
+            {
+              "id": "0910bf03-5f07-4e90-80ca-0d35e730a12a",
+              "name": "change_summary",
+              "value": "={{ $json.change_summary }}",
+              "type": "string"
+            },
+            {
+              "id": "58c36041-52f8-4565-9bc8-abcbe78174f6",
+              "name": "qa_summary",
+              "value": "={{ $json.qa_summary }}",
+              "type": "string"
+            },
+            {
+              "id": "440a56d3-1fbc-4452-a829-231b728432bf",
+              "name": "defect_summary",
+              "value": "={{ $json.defect_summary }}",
+              "type": "string"
+            },
+            {
+              "id": "4d0c4e22-7e56-4e0e-b174-9e72f4fb0116",
+              "name": "final_statement",
+              "value": "={{ $json.final_statement }}",
+              "type": "string"
+            },
+            {
+              "id": "443448fe-b016-40e0-bb76-07f03799f815",
+              "name": "createdAT",
+              "value": "={{ $json.createdAT }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1136,
+        608
+      ],
+      "id": "71bf18c1-d28e-4ca5-adba-980c5f7a0c1d",
+      "name": "Prepare Final Report"
+    },
+    {
+      "parameters": {
+        "operation": "URL/HTML to PDF",
+        "convertType": "htmlToPDF",
+        "html": "={{ $json.html_report }}",
+        "advancedOptions": {}
+      },
+      "type": "n8n-nodes-pdfco.PDFco Api",
+      "typeVersion": 1.1,
+      "position": [
+        1728,
+        576
+      ],
+      "id": "0a123d4e-03e2-468f-adda-c0f603615ddd",
+      "name": "PDF.co",
+      "credentials": {
+        "pdfcoOAuth2Api": {
+          "id": "tnU1gogtdgdgtwVL",
+          "name": "PDF.co account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "codinglearning64@gmail.com",
+        "subject": "NextWave CRM v2.5 - Release Readiness Report",
+        "message": "=Hello,\n\nThe release-readiness assessment for <span style=\"font-size:16px; font-weight:bold;\">NextWave CRM v2.5 </span> has been completed.\n\n<p style=\"font-size:16px;\">\n<strong>Release Recommendation:</strong><br>\n<span style=\"font-size:20px; font-weight:bold;\">\n{{ $('Prepare Final Report').first().json.recommendation }}\n</span>\n</p>\n\n<p>\nThe detailed release-readiness assessment is attached to this email as a <strong>PDF report</strong>, including the release summary, change review, QA results, defect assessment, risks, and final assessment.\n</p>\n\n<p>\n<strong>Final Production Decision:</strong><br>\nThe final production decision will be made by the <strong>Technical Lead</strong>.\n</p>\n\n<p>\nRegards,<br>\n<strong>Release Readiness System</strong><br>\nNextWave Software\n</p>\n",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {}
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2224,
+        576
+      ],
+      "id": "31c295d4-68a9-43d1-ba77-4cc3ac6fb75c",
+      "name": "Send a message",
+      "webhookId": "437d1cf0-0a65-4d15-94ed-191ddbd84e11",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ezpSti0mcrip2zLY",
+          "name": "Gmail account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1968,
+        576
+      ],
+      "id": "8a0d5740-8653-4f95-8062-c77506e6353c",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "get",
+        "owner": {
+          "__rl": true,
+          "value": "Maniraj-CS",
+          "mode": "list",
+          "cachedResultName": "Maniraj-CS",
+          "cachedResultUrl": "https://github.com/Maniraj-CS"
+        },
+        "repository": {
+          "__rl": true,
+          "value": "n8n",
+          "mode": "list",
+          "cachedResultName": "n8n",
+          "cachedResultUrl": "https://github.com/Maniraj-CS/n8n"
+        },
+        "filePath": "release-data.md",
+        "additionalParameters": {}
+      },
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        -3376,
+        880
+      ],
+      "id": "dc405fe5-eaad-4ac3-b8cf-9ad87a181e56",
+      "name": "Get a file",
+      "webhookId": "24c224a1-0069-4df1-917d-d4c0878f59eb",
+      "credentials": {
+        "githubApi": {
+          "id": "6wyAKMkmXabpOzXg",
+          "name": "GitHub account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const markdown = $input.first().json.data;\n\nif (!markdown || typeof markdown !== 'string') {\n  throw new Error('GitHub markdown data is missing or invalid.');\n}\n\nconst lines = markdown\n  .split('\\n')\n  .map(line => line.trim());\n\n// =====================================================\n// Helper Functions\n// =====================================================\n\nfunction getValue(label) {\n  const line = lines.find(line =>\n    line.startsWith(`* **${label}:**`)\n  );\n\n  if (!line) return '';\n\n  return line\n    .replace(`* **${label}:**`, '')\n    .trim();\n}\n\nfunction parseTableRow(line) {\n  return line\n    .split('|')\n    .map(value => value.trim())\n    .filter(Boolean);\n}\n\nfunction findSectionStart(sectionName) {\n  return lines.findIndex(line =>\n    line.includes(sectionName)\n  );\n}\n\nfunction findSectionEnd(startIndex) {\n  if (startIndex === -1) {\n    return lines.length;\n  }\n\n  const end = lines.findIndex((line, index) =>\n    index > startIndex &&\n    line === '---'\n  );\n\n  return end === -1 ? lines.length : end;\n}\n\n// =====================================================\n// 1. RELEASE INFORMATION\n// =====================================================\n\nconst release = {\n  product: getValue('Product'),\n  version: getValue('Release Version'),\n  planned_release_date: getValue('Planned Release Date'),\n  release_type: getValue('Release Type'),\n  release_owner: getValue('Release Owner'),\n  qa_owner: getValue('QA Owner'),\n  deployment_owner: getValue('Deployment Owner'),\n  target_environment: getValue('Target Environment'),\n  previous_version: getValue('Previous Version'),\n  release_status: getValue('Release Status'),\n  main_goal: getValue('Main Goal')\n};\n\n// =====================================================\n// 2. CHANGES\n// =====================================================\n\nconst changes = [];\n\nconst changeSectionStart = findSectionStart(\n  '# Resource 2: Changes'\n);\n\nconst changeStart = lines.findIndex((line, index) =>\n  index > changeSectionStart &&\n  line.startsWith('| CH')\n);\n\nconst changeEnd = findSectionEnd(changeSectionStart);\n\nif (changeStart !== -1) {\n\n  for (let i = changeStart; i < changeEnd; i++) {\n\n    const line = lines[i];\n\n    if (!line.startsWith('| CH')) continue;\n\n    const parts = parseTableRow(line);\n\n    if (parts.length < 6) continue;\n\n    changes.push({\n      id: parts[0],\n      type: parts[1],\n      area: parts[2],\n      change: parts[3],\n      status: parts[4],\n      description: parts[5]\n    });\n  }\n}\n\n// =====================================================\n// 3. QA TESTS\n// =====================================================\n\nconst qa_tests = [];\n\nconst qaSectionStart = findSectionStart(\n  '# Resource 3: QA'\n);\n\nconst qaStart = lines.findIndex((line, index) =>\n  index > qaSectionStart &&\n  line.startsWith('| T')\n);\n\nconst qaEnd = findSectionEnd(qaSectionStart);\n\nif (qaStart !== -1) {\n\n  for (let i = qaStart; i < qaEnd; i++) {\n\n    const line = lines[i];\n\n    if (!line.startsWith('| T')) continue;\n\n    const parts = parseTableRow(line);\n\n    if (parts.length < 6) continue;\n\n    qa_tests.push({\n      id: parts[0],\n      area: parts[1],\n      test_case: parts[2],\n      result: parts[3],\n      priority: parts[4],\n      notes: parts[5]\n    });\n  }\n}\n\n// =====================================================\n// 4. DEFECTS\n// =====================================================\n\nconst defects = [];\n\nconst defectSectionStart = findSectionStart(\n  '# Resource 4: Defects'\n);\n\nconst defectStart = lines.findIndex((line, index) =>\n  index > defectSectionStart &&\n  line.startsWith('| BUG')\n);\n\nconst defectEnd = findSectionEnd(defectSectionStart);\n\nif (defectStart !== -1) {\n\n  for (let i = defectStart; i < defectEnd; i++) {\n\n    const line = lines[i];\n\n    if (!line.startsWith('| BUG')) continue;\n\n    const parts = parseTableRow(line);\n\n    if (parts.length < 7) continue;\n\n    defects.push({\n      id: parts[0],\n      area: parts[1],\n      severity: parts[2],\n      description: parts[3],\n      business_impact: parts[4],\n      workaround: parts[5],\n      status: parts[6]\n    });\n  }\n}\n\n// =====================================================\n// 5. WORKAROUNDS\n// =====================================================\n\nconst workarounds = [];\n\nconst workaroundSectionStart = findSectionStart(\n  '# Resource 4.1: Workarounds'\n);\n\nconst workaroundEnd = findSectionEnd(\n  workaroundSectionStart\n);\n\nif (workaroundSectionStart !== -1) {\n\n  for (\n    let i = workaroundSectionStart;\n    i < workaroundEnd;\n    i++\n  ) {\n\n    const line = lines[i];\n\n    if (!line.startsWith('| BUG')) continue;\n\n    const parts = parseTableRow(line);\n\n    if (parts.length < 2) continue;\n\n    workarounds.push({\n      defect_id: parts[0],\n      workaround: parts[1]\n    });\n  }\n}\n\n// =====================================================\n// 6. RELEASE RULES\n// =====================================================\n\nconst rules = {\n\n  ready: [\n    'No major issue prevents release.',\n    'Remaining risks are acceptable.',\n    'Required reviews and approvals are completed.'\n  ],\n\n  conditional: [\n    'The release may proceed only after specific actions.',\n    'Required approvals are completed.',\n    'Required risk acceptance is confirmed.'\n  ],\n\n  not_ready: [\n    'Important issues must be resolved before release.'\n  ],\n\n  critical_defect: [\n    'Release should not proceed until the defect is resolved.'\n  ],\n\n  high_defect: [\n    'Normally should not proceed.',\n    'Requires formal approval and a strong business reason if an exception is considered.'\n  ],\n\n  medium_defect: [\n    'Business impact is understood.',\n    'A workaround exists where needed.',\n    'Risk acceptance is confirmed.'\n  ],\n\n  low_defect: [\n    'May normally proceed if the issue is documented and assessed as acceptable.'\n  ],\n\n  critical_test_failure: [\n    'Release should be Not Ready.'\n  ],\n\n  high_priority_test_failure: [\n    'Investigation is required before approval.'\n  ],\n\n  medium_priority_test_failure: [\n    'Assess business impact and workaround.'\n  ],\n\n  low_priority_test_failure: [\n    'Document the failure and assess acceptability.'\n  ],\n\n  regression_failure: [\n    'Requires careful review.'\n  ],\n\n  security_failure: [\n    'Release should not proceed until the failure is reviewed/resolved.'\n  ],\n\n  general: [\n    'AI can assess the release but cannot approve production.',\n    'The Technical Lead makes the final production decision.',\n    'Any unresolved Critical or High defect must be clearly highlighted.',\n    'Medium defects must include business impact and workaround information.',\n    'Accepted known issues must be included in the final report.',\n    'Failed tests must not be hidden or minimized just because most tests passed.',\n    'Incomplete, conflicting, or uncertain information must be identified and sent for human review.',\n    'A workaround does not automatically mean that a risk has been accepted.',\n    'Risk acceptance must only be considered confirmed when the input explicitly states that it is confirmed.',\n    'If required risk acceptance is not confirmed, it must be identified as pending human review.'\n  ]\n\n};\n\n// =====================================================\n// FINAL OUTPUT\n// =====================================================\n\nreturn [\n  {\n    json: {\n      release,\n      changes,\n      qa_tests,\n      defects,\n      workarounds,\n      rules\n    }\n  }\n];\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2928,
+        880
+      ],
+      "id": "f56cd246-1686-4873-a5bd-d6a005b64f95",
+      "name": "Parse Release Markdown"
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -3136,
+        880
+      ],
+      "id": "ae75ebd2-3f7b-455b-9ffc-9c5249211621",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.output;\n\ntry {\n  const result = JSON.parse(raw);\n\n  return [\n    {\n      json: result\n    }\n  ];\n} catch (error) {\n  throw new Error(\"Invalid JSON from Change Review Agent\");\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1824,
+        560
+      ],
+      "id": "aab83487-49a8-4881-9242-a9a7df0daf63",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.output;\n\nif (!raw || raw.trim() === \"\") {\n  throw new Error(\"Defect & Risk Agent returned an empty response\");\n}\n\ntry {\n  return [{ json: JSON.parse(raw) }];\n} catch (error) {\n  throw new Error(\"Invalid JSON from Defect & Risk Agent: \" + raw);\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1808,
+        1376
+      ],
+      "id": "70a2d47d-1daf-427a-bc4c-392b074da5a5",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "jsCode": "let raw = $json.output;\n\nif (!raw || raw.trim() === \"\") {\n  throw new Error(\"Release Policy Agent returned an empty response\");\n}\n\n// Strip markdown code fences if present (```json ... ``` or ``` ... ```)\nraw = raw.trim();\nraw = raw.replace(/^```(?:json)?\\s*/i, \"\");\nraw = raw.replace(/```\\s*$/i, \"\");\nraw = raw.trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(raw);\n} catch (error) {\n  throw new Error(\"Invalid JSON from Release Policy Agent: \" + raw);\n}\n\nreturn [{ json: parsed }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -800,
+        608
+      ],
+      "id": "730dcc96-1c37-4328-b353-f0c7659871cc",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.output;\n\nif (!raw || raw.trim() === \"\") {\n  throw new Error(\"Final Assessment Agent returned an empty response\");\n}\n\nlet result;\n\ntry {\n  result = JSON.parse(raw);\n} catch (error) {\n  throw new Error(\"Invalid JSON from Final Assessment Agent: \" + raw);\n}\n\n// Get QA data from the actual output of QA Evidence Agent\nconst qaRaw = $('QA Evidence Agent').first().json.output;\n\nif (!qaRaw || qaRaw.trim() === \"\") {\n  throw new Error(\"QA Evidence Agent returned empty output\");\n}\n\nlet qa;\n\ntry {\n  qa = JSON.parse(qaRaw);\n} catch (error) {\n  throw new Error(\"Invalid JSON from QA Evidence Agent: \" + qaRaw);\n}\n\n// const total = qa.total_tests;\n// const passed = qa.passed_tests;\n// const failed = qa.failed_tests;\n\nreturn [{\n  json: {\n    ...result,\n\n    human_review_required: result.human_review_required || []\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        608
+      ],
+      "id": "01f29650-9151-41f0-85ed-742443025f97",
+      "name": "Code in JavaScript4"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.recommendation }}",
+                    "rightValue": "=Conditional",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "d06821c9-e80c-41f1-9bd2-29442e862515"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "4c94e78e-fbd1-4c5a-8600-22e0ce4c2c39",
+                    "leftValue": "={{ $json.recommendation }}",
+                    "rightValue": "Ready",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "66fc4101-3664-4670-9e14-3b4a3e60edef",
+                    "leftValue": "={{ $json.recommendation }}",
+                    "rightValue": "Not Ready",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        592
+      ],
+      "id": "e574bf67-db77-4477-b212-45148cfb5932",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "release",
+        "fields": "=product,version,recommendation,release_goal,change_summary,qa_summary,defect_summary,final_statement,createdAT",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.4,
+      "position": [
+        848,
+        608
+      ],
+      "id": "92d4ba40-c4f2-4b9a-89f7-656ffb88024d",
+      "name": "Insert documents",
+      "credentials": {
+        "mongoDb": {
+          "id": "D7rm2oQH2akRRd0B",
+          "name": "MongoDB account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8ef13f49-9c6a-469b-b14b-888fa1273b3f",
+              "name": "product",
+              "value": "={{ $json.product }}",
+              "type": "string"
+            },
+            {
+              "id": "a0a81023-bf13-404d-9ecf-696fb75e741f",
+              "name": "version",
+              "value": "={{ $json.version }}",
+              "type": "string"
+            },
+            {
+              "id": "b984d12d-2bd5-43bd-b6d7-84dbe3bd447f",
+              "name": "recommendation",
+              "value": "={{ $json.recommendation }}",
+              "type": "string"
+            },
+            {
+              "id": "65669929-819b-4d16-af66-cec7c0d66c25",
+              "name": "release_goal",
+              "value": "={{ $json.release_goal }}",
+              "type": "string"
+            },
+            {
+              "id": "d29534f8-ccf3-4003-b675-5c2751df1cc7",
+              "name": "change_summary",
+              "value": "={{ $json.change_summary }}",
+              "type": "string"
+            },
+            {
+              "id": "2a3d7c67-954f-425a-842f-0342ab40b297",
+              "name": "qa_summary",
+              "value": "={{ $json.qa_summary }}",
+              "type": "string"
+            },
+            {
+              "id": "97eb3e24-c800-4cc0-b41a-8772af733a82",
+              "name": "defect_summary",
+              "value": "={{ $json.defect_summary }}",
+              "type": "string"
+            },
+            {
+              "id": "0090fa44-0d3d-4db4-9aad-1fef79566829",
+              "name": "final_statement",
+              "value": "={{ $json.final_statement }}",
+              "type": "string"
+            },
+            {
+              "id": "fc5abecc-beb2-456f-8f1d-3baf9832d38a",
+              "name": "createdAT",
+              "value": "={{ $now }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        544,
+        608
+      ],
+      "id": "7c6f9078-f3ce-4134-a520-b63597e469fd",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst data = $json;\n\n// Safely escape HTML\nconst escapeHtml = (value) => {\n  return String(value ?? '')\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;')\n    .replace(/'/g, '&#039;');\n};\n\nconst conditions = (data.conditions || [])\n  .map(item => `<li>${escapeHtml(item)}</li>`)\n  .join('');\n\nconst reviews = (data.human_review_required || [])\n  .map(item => `<li>${escapeHtml(item)}</li>`)\n  .join('');\n\nconst risks = (data.key_risks || [])\n  .map(item => `<li>${escapeHtml(item)}</li>`)\n  .join('');\n\nconst recommendation = escapeHtml(data.recommendation || 'Conditional');\nconst product = escapeHtml(data.product || '-');\nconst version = escapeHtml(data.version || '-');\nconst releaseGoal = escapeHtml(data.release_goal || 'No release goal provided.');\nconst changeSummary = escapeHtml(data.change_summary || 'No change summary provided.');\nconst qaSummary = escapeHtml(data.qa_summary || 'No QA information provided.');\nconst defectSummary = escapeHtml(data.defect_summary || 'No defect information provided.');\nconst finalStatement = escapeHtml(\n  data.final_statement || 'Additional review is required before the release can proceed.'\n);\n\nconst email = `\n<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n\n<style>\nbody {\n  margin: 0;\n  padding: 0;\n  background: #f3f4f6;\n  font-family: Arial, Helvetica, sans-serif;\n  color: #1f2937;\n}\n\n.container {\n  max-width: 720px;\n  margin: 25px auto;\n  background: #ffffff;\n  border-radius: 14px;\n  overflow: hidden;\n  border: 1px solid #e5e7eb;\n}\n\n/* HEADER */\n.header {\n  background: #111827;\n  color: #ffffff;\n  padding: 28px 32px;\n}\n\n.header-top {\n  font-size: 12px;\n  color: #9ca3af;\n  margin-bottom: 8px;\n  text-transform: uppercase;\n  letter-spacing: 1px;\n}\n\n.header h1 {\n  margin: 0;\n  font-size: 25px;\n  font-weight: 700;\n}\n\n.header p {\n  margin: 8px 0 0;\n  color: #d1d5db;\n  font-size: 14px;\n}\n\n/* CONTENT */\n.content {\n  padding: 30px 32px;\n}\n\n/* RELEASE INFO */\n.release-info {\n  width: 100%;\n  border-collapse: collapse;\n  margin-bottom: 25px;\n}\n\n.release-info td {\n  padding: 10px 12px;\n  border-bottom: 1px solid #f0f0f0;\n}\n\n.label {\n  width: 130px;\n  color: #6b7280;\n  font-size: 13px;\n  font-weight: 600;\n}\n\n.value {\n  color: #111827;\n  font-size: 14px;\n  font-weight: 600;\n}\n\n/* STATUS */\n.status-box {\n  background: #fffbeb;\n  border: 1px solid #fde68a;\n  border-radius: 10px;\n  padding: 18px;\n  margin-bottom: 28px;\n  text-align: center;\n}\n\n.status-label {\n  font-size: 11px;\n  color: #92400e;\n  text-transform: uppercase;\n  letter-spacing: 1px;\n  margin-bottom: 6px;\n}\n\n.status {\n  color: #b45309;\n  font-size: 23px;\n  font-weight: 700;\n}\n\n/* INTRO */\n.intro {\n  color: #4b5563;\n  line-height: 1.7;\n  font-size: 14px;\n  margin-bottom: 28px;\n}\n\n/* SECTIONS */\n.section {\n  margin-top: 28px;\n}\n\n.section-title {\n  font-size: 16px;\n  font-weight: 700;\n  color: #111827;\n  margin-bottom: 12px;\n  padding-bottom: 9px;\n  border-bottom: 1px solid #e5e7eb;\n}\n\n.section p {\n  margin: 0;\n  color: #4b5563;\n  font-size: 14px;\n  line-height: 1.75;\n}\n\n/* SUMMARY CARDS */\n.summary-grid {\n  margin-top: 12px;\n}\n\n.summary-card {\n  background: #f9fafb;\n  border: 1px solid #e5e7eb;\n  border-radius: 9px;\n  padding: 15px;\n  margin-bottom: 10px;\n}\n\n.summary-card-title {\n  font-size: 12px;\n  font-weight: 700;\n  color: #6b7280;\n  text-transform: uppercase;\n  margin-bottom: 6px;\n}\n\n.summary-card-text {\n  font-size: 14px;\n  color: #374151;\n  line-height: 1.6;\n}\n\n/* LISTS */\nul {\n  margin: 8px 0 0;\n  padding-left: 22px;\n}\n\nli {\n  color: #4b5563;\n  font-size: 14px;\n  line-height: 1.7;\n  margin-bottom: 7px;\n}\n\n/* WARNING BOX */\n.review-box {\n  margin-top: 30px;\n  padding: 20px;\n  background: #fff7ed;\n  border: 1px solid #fed7aa;\n  border-radius: 10px;\n}\n\n.review-box-title {\n  color: #9a3412;\n  font-size: 15px;\n  font-weight: 700;\n  margin-bottom: 7px;\n}\n\n.review-box p {\n  margin: 0;\n  color: #7c2d12;\n  font-size: 13px;\n  line-height: 1.7;\n}\n\n/* FOOTER */\n.footer {\n  padding: 20px 32px;\n  background: #f9fafb;\n  border-top: 1px solid #e5e7eb;\n  font-size: 12px;\n  color: #6b7280;\n  line-height: 1.6;\n}\n\n.footer strong {\n  color: #374151;\n}\n\n</style>\n</head>\n\n<body>\n\n<div class=\"container\">\n\n  <!-- HEADER -->\n  <div class=\"header\">\n    <div class=\"header-top\">\n      NextWave Software\n    </div>\n\n    <h1>Software Release Readiness Review</h1>\n\n    <p>\n      Release assessment requires additional review\n    </p>\n  </div>\n\n\n  <div class=\"content\">\n\n    <!-- RELEASE INFORMATION -->\n    <table class=\"release-info\">\n      <tr>\n        <td class=\"label\">Product</td>\n        <td class=\"value\">${product}</td>\n      </tr>\n\n      <tr>\n        <td class=\"label\">Version</td>\n        <td class=\"value\">${version}</td>\n      </tr>\n\n      <tr>\n        <td class=\"label\">Assessment</td>\n        <td class=\"value\">Release Readiness</td>\n      </tr>\n    </table>\n\n\n    <!-- STATUS -->\n    <div class=\"status-box\">\n\n      <div class=\"status-label\">\n        Release Recommendation\n      </div>\n\n      <div class=\"status\">\n        ${recommendation}\n      </div>\n\n    </div>\n\n\n    <!-- RELEASE GOAL -->\n    <div class=\"section\">\n\n      <div class=\"section-title\">\n        Release Goal\n      </div>\n\n      <p>\n        ${releaseGoal}\n      </p>\n\n    </div>\n\n\n    <!-- CHANGE SUMMARY -->\n    <div class=\"section\">\n\n      <div class=\"section-title\">\n        Change Summary\n      </div>\n\n      <p>\n        ${changeSummary}\n      </p>\n\n    </div>\n\n\n    <!-- QA SUMMARY -->\n    <div class=\"section\">\n\n      <div class=\"section-title\">\n        QA Summary\n      </div>\n\n      <div class=\"summary-card\">\n\n        <div class=\"summary-card-title\">\n          Test Execution\n        </div>\n\n        <div class=\"summary-card-text\">\n          ${qaSummary}\n        </div>\n\n      </div>\n\n    </div>\n\n\n    <!-- DEFECT SUMMARY -->\n    <div class=\"section\">\n\n      <div class=\"section-title\">\n        Defect Summary\n      </div>\n\n      <p>\n        ${defectSummary}\n      </p>\n\n    </div>\n\n\n    <!-- KEY RISKS -->\n    <div class=\"section\">\n\n      <div class=\"section-title\">\n        Key Risks\n      </div>\n\n      <ul>\n        ${\n          risks ||\n          '<li>No significant risks identified.</li>'\n        }\n      </ul>\n\n    </div>\n\n\n    <!-- CONDITIONS -->\n    <div class=\"section\">\n\n      <div class=\"section-title\">\n        Release Conditions\n      </div>\n\n      <ul>\n        ${\n          conditions ||\n          '<li>No additional conditions identified.</li>'\n        }\n      </ul>\n\n    </div>\n\n\n    <!-- HUMAN REVIEW -->\n    <div class=\"section\">\n\n      <div class=\"section-title\">\n        Human Review Required\n      </div>\n\n      <ul>\n        ${\n          reviews ||\n          '<li>No additional human review items identified.</li>'\n        }\n      </ul>\n\n    </div>\n\n\n    <!-- FINAL ASSESSMENT -->\n    <div class=\"section\">\n\n      <div class=\"section-title\">\n        Final Assessment\n      </div>\n\n      <p>\n        ${finalStatement}\n      </p>\n\n    </div>\n\n\n    <!-- REVIEW NOTICE -->\n    <div class=\"review-box\">\n\n      <div class=\"review-box-title\">\n        Action Required\n      </div>\n\n      <p>\n        Please review the release conditions, risks, and outstanding\n        items before making the release decision.\n        The final production decision remains with the Technical Lead.\n      </p>\n\n    </div>\n\n  </div>\n\n\n  <!-- FOOTER -->\n  <div class=\"footer\">\n\n    <strong>AI-generated release-readiness assessment.</strong>\n\n    <br>\n\n    This assessment is generated from the release evidence\n    available in the workflow.\n\n    <br><br>\n\n    Final production decision:\n    <strong>Technical Lead</strong>\n\n  </div>\n\n</div>\n\n</body>\n</html>\n`;\n\nreturn [\n  {\n    json: {\n      email_html: email,\n      email_subject:\n        `Action Required: Release ${data.product} v${data.version} — ${data.recommendation}`\n    }\n  }\n];\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        416
+      ],
+      "id": "7db5b584-bc0d-4512-b8aa-a730c0fd48fd",
+      "name": "Generate Conditional Email"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cb33b27a-597f-4f1f-ba71-c81c2134bf92",
+              "leftValue": "={{ $json.data.Decision }}",
+              "rightValue": "=Finished",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f28e7a80-2b1c-4d98-8bb0-9edec2655ef5",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "codinglearning64@gmail.com",
+        "subject": "={{ $json.email_subject }}",
+        "message": "={{ $json.email_html }}",
+        "responseType": "customForm",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Decision",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Finished"
+                  },
+                  {
+                    "option": "Hold"
+                  }
+                ]
+              },
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "resumeAmount": 45,
+              "resumeUnit": "minutes"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        256,
+        192
+      ],
+      "id": "2c7ba3b3-5fdf-4bcd-90e5-b9338a80894e",
+      "name": "Send message and wait for response",
+      "webhookId": "1ab3f7ad-81f5-4dde-89e9-48bace2641e6",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ezpSti0mcrip2zLY",
+          "name": "Gmail account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst data = $json;\n\n// Safely escape HTML\nconst escapeHtml = (value) => {\n  return String(value ?? '')\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;')\n    .replace(/'/g, '&#039;');\n};\n\nconst product = escapeHtml(data.product || '-');\nconst version = escapeHtml(data.version || '-');\nconst recommendation = escapeHtml(data.recommendation || 'Not Ready');\n\nconst releaseGoal = escapeHtml(\n  data.release_goal || 'No release goal provided.'\n);\n\nconst changeSummary = escapeHtml(\n  data.change_summary || 'No change summary provided.'\n);\n\nconst qaSummary = escapeHtml(\n  data.qa_summary || 'No QA information provided.'\n);\n\nconst defectSummary = escapeHtml(\n  data.defect_summary || 'No defect information provided.'\n);\n\nconst finalStatement = escapeHtml(\n  data.final_statement ||\n  'The release cannot proceed until the blocking issues are resolved.'\n);\n\nconst risks = (data.key_risks || [])\n  .map(risk => `<li>${escapeHtml(risk)}</li>`)\n  .join('');\n\nconst conditions = (data.conditions || [])\n  .map(condition => `<li>${escapeHtml(condition)}</li>`)\n  .join('');\n\nconst reviews = (data.human_review_required || [])\n  .map(item => `<li>${escapeHtml(item)}</li>`)\n  .join('');\n\nconst email = `\n<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n\n<style>\n\nbody {\n  margin: 0;\n  padding: 0;\n  background: #f3f4f6;\n  font-family: Arial, Helvetica, sans-serif;\n  color: #1f2937;\n}\n\n.container {\n  max-width: 720px;\n  margin: 25px auto;\n  background: #ffffff;\n  border-radius: 14px;\n  overflow: hidden;\n  border: 1px solid #e5e7eb;\n}\n\n/* HEADER */\n\n.header {\n  background: #991b1b;\n  color: #ffffff;\n  padding: 28px 32px;\n}\n\n.alert-label {\n  font-size: 12px;\n  font-weight: bold;\n  letter-spacing: 1.5px;\n  text-transform: uppercase;\n  color: #fecaca;\n  margin-bottom: 8px;\n}\n\n.header h1 {\n  margin: 0;\n  font-size: 25px;\n}\n\n.header p {\n  margin: 8px 0 0;\n  color: #fee2e2;\n  font-size: 14px;\n}\n\n/* CONTENT */\n\n.content {\n  padding: 30px 32px;\n}\n\n/* RELEASE INFO */\n\n.release-info {\n  width: 100%;\n  border-collapse: collapse;\n  margin-bottom: 25px;\n}\n\n.release-info td {\n  padding: 10px 12px;\n  border-bottom: 1px solid #f0f0f0;\n}\n\n.label {\n  width: 130px;\n  color: #6b7280;\n  font-size: 13px;\n  font-weight: 600;\n}\n\n.value {\n  color: #111827;\n  font-size: 14px;\n  font-weight: 600;\n}\n\n/* STATUS */\n\n.status-box {\n  background: #fef2f2;\n  border: 1px solid #fecaca;\n  border-radius: 10px;\n  padding: 20px;\n  margin-bottom: 28px;\n  text-align: center;\n}\n\n.status-label {\n  font-size: 11px;\n  color: #991b1b;\n  text-transform: uppercase;\n  letter-spacing: 1px;\n  margin-bottom: 6px;\n}\n\n.status {\n  color: #b91c1c;\n  font-size: 24px;\n  font-weight: 700;\n}\n\n/* ALERT */\n\n.alert-box {\n  background: #fff7ed;\n  border: 1px solid #fed7aa;\n  border-left: 5px solid #dc2626;\n  border-radius: 8px;\n  padding: 18px 20px;\n  margin-bottom: 28px;\n}\n\n.alert-title {\n  color: #991b1b;\n  font-size: 16px;\n  font-weight: 700;\n  margin-bottom: 8px;\n}\n\n.alert-text {\n  color: #7f1d1d;\n  font-size: 14px;\n  line-height: 1.7;\n}\n\n/* SECTIONS */\n\n.section {\n  margin-top: 28px;\n}\n\n.section-title {\n  font-size: 16px;\n  font-weight: 700;\n  color: #111827;\n  margin-bottom: 12px;\n  padding-bottom: 9px;\n  border-bottom: 1px solid #e5e7eb;\n}\n\n.section p {\n  margin: 0;\n  color: #4b5563;\n  font-size: 14px;\n  line-height: 1.75;\n}\n\n/* BLOCKING ISSUE */\n\n.blocking-box {\n  background: #fef2f2;\n  border: 1px solid #fecaca;\n  border-radius: 10px;\n  padding: 18px;\n  margin-top: 12px;\n}\n\n.blocking-title {\n  color: #991b1b;\n  font-size: 14px;\n  font-weight: 700;\n  margin-bottom: 8px;\n}\n\n.blocking-box ul {\n  margin: 0;\n  padding-left: 20px;\n}\n\n/* LISTS */\n\nul {\n  margin: 8px 0 0;\n  padding-left: 22px;\n}\n\nli {\n  color: #4b5563;\n  font-size: 14px;\n  line-height: 1.7;\n  margin-bottom: 7px;\n}\n\n/* FINAL */\n\n.final-box {\n  margin-top: 30px;\n  padding: 20px;\n  background: #f9fafb;\n  border: 1px solid #e5e7eb;\n  border-radius: 10px;\n}\n\n.final-box p {\n  margin: 0;\n  color: #374151;\n  font-size: 14px;\n  line-height: 1.75;\n}\n\n/* FOOTER */\n\n.footer {\n  padding: 20px 32px;\n  background: #f9fafb;\n  border-top: 1px solid #e5e7eb;\n  font-size: 12px;\n  color: #6b7280;\n  line-height: 1.6;\n}\n\n.footer strong {\n  color: #374151;\n}\n\n</style>\n</head>\n\n<body>\n\n<div class=\"container\">\n\n  <!-- HEADER -->\n\n  <div class=\"header\">\n\n    <div class=\"alert-label\">\n      High Alert — Release Blocked\n    </div>\n\n    <h1>Production Release Not Ready</h1>\n\n    <p>\n      NextWave Software — Release Readiness System\n    </p>\n\n  </div>\n\n\n  <div class=\"content\">\n\n    <!-- RELEASE INFORMATION -->\n\n    <table class=\"release-info\">\n\n      <tr>\n        <td class=\"label\">Product</td>\n        <td class=\"value\">${product}</td>\n      </tr>\n\n      <tr>\n        <td class=\"label\">Version</td>\n        <td class=\"value\">${version}</td>\n      </tr>\n\n      <tr>\n        <td class=\"label\">Recommendation</td>\n        <td class=\"value\">${recommendation}</td>\n      </tr>\n\n    </table>\n\n\n    <!-- STATUS -->\n\n    <div class=\"status-box\">\n\n      <div class=\"status-label\">\n        Release Recommendation\n      </div>\n\n      <div class=\"status\">\n        NOT READY\n      </div>\n\n    </div>\n\n\n    <!-- HIGH ALERT -->\n\n    <div class=\"alert-box\">\n\n      <div class=\"alert-title\">\n        ⚠ Production Release Blocked\n      </div>\n\n      <div class=\"alert-text\">\n        The release assessment identified a blocking issue that\n        must be resolved before the release can proceed to production.\n      </div>\n\n    </div>\n\n\n    <!-- RELEASE GOAL -->\n\n    <div class=\"section\">\n\n      <div class=\"section-title\">\n        Release Goal\n      </div>\n\n      <p>\n        ${releaseGoal}\n      </p>\n\n    </div>\n\n\n    <!-- CHANGE SUMMARY -->\n\n    <div class=\"section\">\n\n      <div class=\"section-title\">\n        Change Summary\n      </div>\n\n      <p>\n        ${changeSummary}\n      </p>\n\n    </div>\n\n\n    <!-- QA -->\n\n    <div class=\"section\">\n\n      <div class=\"section-title\">\n        QA Summary\n      </div>\n\n      <p>\n        ${qaSummary}\n      </p>\n\n    </div>\n\n\n    <!-- DEFECT SUMMARY -->\n\n    <div class=\"section\">\n\n      <div class=\"section-title\">\n        Defect Summary\n      </div>\n\n      <p>\n        ${defectSummary}\n      </p>\n\n    </div>\n\n\n    <!-- BLOCKING RISKS -->\n\n    <div class=\"section\">\n\n      <div class=\"section-title\">\n        Blocking Risks\n      </div>\n\n      <div class=\"blocking-box\">\n\n        <div class=\"blocking-title\">\n          Critical Issues Requiring Resolution\n        </div>\n\n        <ul>\n          ${\n            risks ||\n            '<li>No blocking risk details provided.</li>'\n          }\n        </ul>\n\n      </div>\n\n    </div>\n\n\n    <!-- CONDITIONS -->\n\n    <div class=\"section\">\n\n      <div class=\"section-title\">\n        Required Actions\n      </div>\n\n      <ul>\n        ${\n          conditions ||\n          '<li>Resolve all blocking issues before release.</li>'\n        }\n      </ul>\n\n    </div>\n\n\n    <!-- HUMAN REVIEW -->\n\n    ${\n      reviews\n        ? `\n    <div class=\"section\">\n\n      <div class=\"section-title\">\n        Human Review Required\n      </div>\n\n      <ul>\n        ${reviews}\n      </ul>\n\n    </div>\n    `\n        : ''\n    }\n\n\n    <!-- FINAL ASSESSMENT -->\n\n    <div class=\"section\">\n\n      <div class=\"section-title\">\n        Final Assessment\n      </div>\n\n      <div class=\"final-box\">\n\n        <p>\n          ${finalStatement}\n        </p>\n\n      </div>\n\n    </div>\n\n  </div>\n\n\n  <!-- FOOTER -->\n\n  <div class=\"footer\">\n\n    <strong>AI-generated release-readiness assessment.</strong>\n\n    <br>\n\n    This assessment is generated from the release evidence\n    available in the workflow.\n\n    <br><br>\n\n    Final production decision:\n    <strong>Technical Lead.</strong>\n\n  </div>\n\n</div>\n\n</body>\n</html>\n`;\n\nreturn [\n  {\n    json: {\n      email_html: email,\n      email_subject:\n        `🚨 HIGH ALERT: Release ${data.product} v${data.version} — NOT READY`\n    }\n  }\n];\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        368,
+        992
+      ],
+      "id": "a9ac9bbb-8086-497e-a6ce-7e387ed9c9d0",
+      "name": "Code in JavaScript5"
+    },
+    {
+      "parameters": {
+        "sendTo": "codinglearning64@gmail.com",
+        "subject": "={{ $json.email_subject }}",
+        "message": "={{ $json.email_html }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        576,
+        1008
+      ],
+      "id": "c2ffaeaa-b524-4ea7-b469-1caa35cb4a5d",
+      "name": "Send a message1",
+      "webhookId": "f1d3d16b-b0a0-46c1-8085-13d402402cbe",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ezpSti0mcrip2zLY",
+          "name": "Gmail account 4"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get a file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Change Review Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "QA Evidence Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Defect & Risk Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Release Policy Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Change Review Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QA Evidence Agent": {
+      "main": [
+        [
+          {
+            "node": "Merge Change + QA",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Change + QA": {
+      "main": [
+        [
+          {
+            "node": "Merge All Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge All Evidence": {
+      "main": [
+        [
+          {
+            "node": "Release Policy Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Release Policy Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Final Release Assessment Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Defect & Risk Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Release Assessment Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Final Report": {
+      "main": [
+        [
+          {
+            "node": "Generate Release Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Release Report": {
+      "main": [
+        [
+          {
+            "node": "PDF.co",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF.co": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a file": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Parse Release Markdown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Release Markdown": {
+      "main": [
+        [
+          {
+            "node": "Defect & Risk Agent",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Change Review Agent",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "QA Evidence Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Merge Change + QA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Merge All Evidence",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "Final Release Assessment Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript4": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Generate Conditional Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Insert documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert documents": {
+      "main": [
+        [
+          {
+            "node": "Prepare Final Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Conditional Email": {
+      "main": [
+        [
+          {
+            "node": "Send message and wait for response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send message and wait for response": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Get a file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript5": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "32a2591d-f89a-48b1-8e99-bdd4caff9cca",
+  "meta": {
+    "instanceId": "054a62f95ee52aa18a295eed02c1590feaa951d289154ccec1e0c2054e91f7f6"
+  },
+  "nodeGroups": [],
+  "id": "jqLcw2XaQ20GBU66",
+  "tags": []
+}
